@@ -1,0 +1,14 @@
+let
+    function loopAndPrint (n : int) = 
+        let
+            var i := 0
+        in
+            while i < n do
+            (
+                i := i + 1;
+                println (i)
+            )
+        end
+in
+    loopAndPrint (10)
+end

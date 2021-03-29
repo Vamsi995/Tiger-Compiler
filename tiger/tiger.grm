@@ -1,0 +1,207 @@
+(* This is the preamble where you can have arbitrary sml code. For us
+it is empty *)
+
+%%
+(* The terminals or tokens of the language *)
+%term INT of int
+    | STRING of string
+    | ID of string
+    | ARRAY | IF | THEN | ELSE | WHILE | FOR | TO | DO | LET | IN | END | OF | BREAK | NIL | FUNCTION | VAR | TYPE | ASSIGN | PRIMITIVE
+    | LPAREN | RPAREN | LSQBRACK | RSQBRACK | LFLOBRACK | RFLOBRACK  
+    | COMMA | COLON | SEMICOLON | DOT 
+    | PLUS
+    | MINUS
+    | MUL
+    | DIV
+    | EQUAL
+    | LT
+    | GT
+    | LEQ
+    | GEQ
+    | AND
+    | NEQ
+    | OR
+    | EOF
+
+(* The nonterminals of the language *)
+%nonterm program        of AST.ast
+        | exp           of AST.exp 
+        | exps          of AST.exp list
+        | ins_array     of AST.exp
+        | ins_record    of AST.exp
+        | recordField   of {varname: string, value:AST.exp}
+        | recordlist    of {varname: string, value:AST.exp} list
+
+        | lvalue        of AST.lvalue
+        | OperExp       of AST.exp
+        | functionApplication      of AST.exp
+        | arglist       of AST.exp list 
+        | assign        of AST.exp
+        | ifthen        of AST.exp
+        | ifelsethen    of AST.exp
+        | whileCond     of AST.exp
+        | forCond       of AST.exp
+        | letCond       of AST.exp
+
+        | dec           of AST.dec
+        | decs          of AST.dec list
+        | fundec        of AST.dec
+        | typedec       of AST.dec
+        | vardec        of AST.dec
+        | primitivedec  of AST.dec
+
+        | ty             of AST.ty
+        | tyfield        of AST.tyfield
+        | tyfields       of AST.tyfield list
+
+
+
+%eop EOF (* What token to use as end of parsing token              *)
+%verbose (* Generates a printed form of the table in expr.grm.desc *)
+%pure
+
+
+%name Tiger (* The prefix to use on the name of LrValFun structure *)
+
+
+%noshift EOF
+(*
+
+Operator precedence and associativity. The %left says the operator is
+left associative and the precedence increase as you go down this list.
+
+*)
+
+%prefer THEN ELSE LSQBRACK
+
+%nonassoc TYPE FUNCTION
+%nonassoc ID 
+%nonassoc LSQBRACK LFLOBRACK
+%nonassoc THEN
+%nonassoc ELSE DO
+%nonassoc ASSIGN OF
+%left OR
+%left AND                               (* + and - are of same precedence *)
+%nonassoc GEQ LEQ EQUAL NEQ LT GT  (* + and - are of same precedence *)
+%left PLUS MINUS  (* + and - are of same precedence *)
+%left MUL DIV     (* higher than + and -            *)
+
+(* The type that captures position in the input *)
+%pos int
+
+%%
+
+program : exp                                                   ( AST.expressions(exp) )
+        | decs                                                  ( AST.declarations(decs) )
+
+exps   :                                                        ( [] )
+        | exp                                                   ( [exp] )
+        | exp SEMICOLON exps                                    ( exp :: exps )
+
+
+exp    : NIL                                                    ( AST.NULL )
+        | INT                                                   ( AST.integerExp(INT) )
+        | STRING                                                ( AST.stringExp(STRING) )
+        | lvalue                                                ( AST.variableExp(lvalue) )
+        | LPAREN exps RPAREN                                    ( AST.exps(exps) )
+        | OperExp                                               ( OperExp )
+        | functionApplication                                   ( functionApplication )
+        | ins_array                                             ( ins_array )
+        | MINUS exp                                             ( AST.negExp(exp))
+        | ins_record                                            ( ins_record )
+        | assign                                                ( assign )
+        | ifthen                                                ( ifthen )
+        | ifelsethen                                            ( ifelsethen )
+        | whileCond                                             ( whileCond )
+        | forCond                                               ( forCond )
+        | letCond                                               ( letCond )
+
+
+OperExp : exp PLUS exp                                          ( AST.Oper {leftexp=exp1, oper=AST.Plus, rightexp=exp2}  )
+        | exp MINUS exp                                         ( AST.Oper {leftexp=exp1, oper=AST.Minus, rightexp=exp2} )
+        | exp MUL exp                                           ( AST.Oper {leftexp=exp1, oper=AST.Mul, rightexp=exp2}   )
+        | exp DIV exp                                           ( AST.Oper {leftexp=exp1, oper=AST.Div, rightexp=exp2}   )
+        | exp EQUAL exp                                         ( AST.Oper {leftexp=exp1, oper=AST.Equal, rightexp=exp2} )
+        | exp LT exp                                            ( AST.Oper {leftexp=exp1, oper=AST.LeT, rightexp=exp2}   )
+        | exp GT exp                                            ( AST.Oper {leftexp=exp1, oper=AST.GrT, rightexp=exp2}   )
+        | exp LEQ exp                                           ( AST.Oper {leftexp=exp1, oper=AST.Leq, rightexp=exp2}   )
+        | exp GEQ exp                                           ( AST.Oper {leftexp=exp1, oper=AST.Geq, rightexp=exp2}   )
+        | exp NEQ exp                                           ( AST.Oper {leftexp=exp1, oper=AST.Neq, rightexp=exp2}   )
+        | exp AND exp                                           ( AST.Oper {leftexp=exp1, oper=AST.And, rightexp=exp2}   )
+        | exp OR exp                                            ( AST.Oper {leftexp=exp1, oper=AST.Or, rightexp=exp2}    )
+
+
+functionApplication : ID LPAREN arglist RPAREN                  ( AST.funCall {varID=ID, args=arglist } )
+
+arglist :                                                       ( [] )
+        | exp                                                   ( [exp] )
+        | arglist COMMA exp                                     ( exp :: arglist )
+
+ifelsethen: IF exp THEN exp ELSE exp                            ( AST.ifCond {check=exp1, thenCond=exp2, elseCond=Option.SOME(exp3)} )
+
+
+ifthen  : IF exp THEN exp                                       ( AST.ifCond {check=exp1, thenCond=exp2, elseCond=Option.NONE} )
+
+
+whileCond: WHILE exp DO exp                                     ( AST.whileCond { check=exp1, doCond=exp2 } )
+
+
+forCond: FOR ID ASSIGN exp TO exp DO exp                        ( AST.forCond {check=ID, equalto=exp1, limit=exp2, doCond=exp3} )
+
+letCond : LET decs IN exps END                                  ( AST.letCond { declist=decs, explist=exps} )
+
+
+lvalue : ID                                                     ( AST.variable(ID) )
+        | lvalue DOT ID                                         ( AST.objectReference {varname=lvalue, instance=ID} )
+        | ID LSQBRACK exp RSQBRACK                              ( AST.arrayAccess {arrname=AST.variable(ID), arrelement=exp} )
+        | lvalue LSQBRACK exp RSQBRACK                          ( AST.arrayAccess {arrname=lvalue, arrelement=exp} )
+
+
+assign: lvalue ASSIGN exp                                       ( AST.assignment {lhs=lvalue, rhs=exp} )
+
+
+ins_array : ID LSQBRACK exp RSQBRACK OF exp                     ( AST.arrayCreation {type_id=(ID), size=exp1, value=exp2} )
+
+
+dec : typedec                                                   ( typedec )
+    | vardec                                                    ( vardec )
+    | fundec                                                    ( fundec )
+    | primitivedec                                              ( primitivedec )
+
+decs : dec                                                      ( [dec] )
+     | dec decs                                                 ( dec :: decs )
+
+
+typedec : TYPE ID EQUAL ty                                      ( AST.typeDec {id=ID, type_id=ty} )
+vardec  : VAR ID ASSIGN exp                                     ( AST.varDec { varID=ID, type_id=Option.NONE, rhs=exp} )
+
+     | VAR ID COLON ID ASSIGN exp                               ( AST.varDec { varID=ID1, type_id=Option.SOME(ID2), rhs=exp} )
+
+
+fundec  : FUNCTION ID LPAREN tyfields RPAREN EQUAL exp          ( AST.funDec { varID=ID, fields=tyfields, type_id=Option.NONE,value=exp} )
+      | FUNCTION ID LPAREN tyfields RPAREN COLON ID EQUAL exp   ( AST.funDec { varID=ID1, fields=tyfields, type_id=Option.SOME(ID2), value=exp } )
+
+primitivedec : PRIMITIVE ID LPAREN tyfields RPAREN              ( AST.primitiveDec { varID=ID, fields=tyfields, type_id=Option.NONE} )
+      | PRIMITIVE ID LPAREN tyfields RPAREN COLON ID            ( AST.primitiveDec { varID=ID1, fields=tyfields, type_id=Option.SOME(ID2)} )
+
+ty: ID                                                          ( AST.typeAlias (ID) )
+  | LFLOBRACK tyfields RFLOBRACK                                ( AST.recordType (tyfields) )
+  | ARRAY OF ID                                                 ( AST.arrayType (ID) )
+
+
+tyfield: ID COLON ID                                            ( AST.fields {id=ID1, type_id=(ID2)} )
+
+
+tyfields :                                                      ( [] )
+        | tyfield                                               ( [tyfield] )
+        | tyfield COMMA tyfields                                ( tyfield :: tyfields )
+
+
+
+ins_record: ID LFLOBRACK recordlist RFLOBRACK                   ( AST.recordCreation {type_id= (ID), assignments=recordlist } )
+
+recordField : ID EQUAL exp                                      ( {varname= ID, value=exp} ) 
+
+recordlist:                                                     ( [] )
+        | recordField                                           ( [recordField] )
+        | recordField  COMMA recordlist                         ( recordField :: recordlist )

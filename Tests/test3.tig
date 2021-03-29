@@ -1,0 +1,23 @@
+let
+    function max (x : int, y : int) =
+        let
+            var maxVal := 0
+        in
+            (
+                (
+                    if(x > y) then
+                        maxVal := x
+                    else
+                        maxVal := y
+                );
+                maxVal
+            )
+        end
+in
+    let
+        var x := 10
+        var y := 20
+    in
+        max (x, y)
+    end
+end
